@@ -1,32 +1,42 @@
 import os
-import time
 import inquirer
+from time import sleep
 from loguru import logger
 from requests import Session
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.edge.service import Service as EdgeService
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.firefox.service import Service as FirefoxService
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from api import MicroCourse
-from utils import load, save, prompt, getCourseInfo
+from utils import load, save, prompt, get_course_info
 
 class Config:
     def __init__(self):
-        if not os.path.exists("config.json"):
-            logger.info("配置文件不存在，正在创建...")
-            save({})
         try:
             self.config = load()
+            self.first_run = False
         except:
+            self.first_run = True
+            logger.info("配置文件不存在，正在创建...")
             save({})
             self.config = load()
+        if "max_workers" not in self.config:
+            self.config['max_workers'] = int(prompt([inquirer.Text(
+                name="max_workers",
+                message="请输入最大线程数(默认16)",
+                default=16,
+                validate=lambda _, x: x.isdigit() or "请输入数字"
+            )])['max_workers'])
         if "cookies" not in self.config:
             self.config["cookies"] = {}
 
         self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" +
+            " (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0"
         }
 
         if "token" in self.config['cookies']:
@@ -39,16 +49,48 @@ class Config:
         self.session = Session()
         self.session.headers = self.headers
 
-    def toLogin(self):
-        edge_options = webdriver.EdgeOptions()
-        edge_options.add_argument('--log-level=3')
-        edge_options.add_argument('--disable-dev-shm-usage')
-        edge_options.add_argument('--disable-logging')
-        edge_options.add_experimental_option('excludeSwitches', ['enable-logging'])
-        driver = webdriver.Edge(options=edge_options)
+    def get_web_driver(self):
+        web_drivers = [
+            ('Chrome', webdriver.Chrome, ChromeService),
+            ('Edge', webdriver.Edge, EdgeService),
+            ('Firefox', webdriver.Firefox, FirefoxService)
+        ]
+        for name, driver_class, service_class in web_drivers:
+            try:
+                logger.info(f"尝试调用 {name}")
+                driver_options = {
+                    'Chrome': webdriver.ChromeOptions,
+                    'Edge': webdriver.EdgeOptions,
+                    'Firefox': webdriver.FirefoxOptions
+                }[name]()
+                common_options = [
+                    '--log-level=3',
+                    '--disable-dev-shm-usage',
+                    '--disable-logging',
+                    '--no-sandbox',
+                    '--disable-gpu'
+                ]
+                for option in common_options:
+                    driver_options.add_argument(option)
+                driver_options.add_experimental_option('excludeSwitches', ['enable-logging'])
+                driver = driver_class(service=service_class(), options=driver_options)
+                logger.success(f"调用浏览器 {name}")
+                return driver
+            except (WebDriverException, ValueError) as e:
+                logger.warning(f"{name} 驱动初始化失败")
+                continue
+            except Exception as e:
+                raise e
+        logger.error("未找到可用的浏览器驱动")
+        raise RuntimeError("未找到可用的浏览器驱动")
+
+    def to_login(self):
+        driver = self.get_web_driver()
         driver.get("https://le.ouchn.cn/")
         try:
-            button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CLASS_NAME, "login-btn")))
+            button = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.CLASS_NAME, "login-btn"))
+            )
             button.click()
 
             while True:
@@ -65,14 +107,14 @@ class Config:
                     save(self.config)
                     break
                 else:
-                    time.sleep(1)
+                    sleep(2)
                     continue
         except WebDriverException as e:
             raise e
         finally:
             driver.quit()
 
-    def tryLogin(self):
+    def try_login(self):
         while True:
             response = self.session.get("https://passport.le.ouchn.cn/localApi/UserInfo")
             if response.status_code == 200:
@@ -83,9 +125,9 @@ class Config:
                 self.config['cookies'] = {}
                 save(self.config)
                 self.__init__()
-                self.toLogin()
+                self.to_login()
 
-    def microCourseConfig(self):
+    def micro_course_config(self):
         DEFAULT_COURSES = (
             "f020ff29-b591-96cc-96c8-74f889692a42",
             "549d8e42-2fb8-f7b6-9067-4b1bd7a7b6f7",
@@ -114,8 +156,17 @@ class Config:
                     name="courses",
                     message="目前可选默认课程 (按空格键选择，回车键确定)",
                     choices=[
-                        f"{getCourseInfo(self.session, DEFAULT_COURSES[i])['Name']} | {DEFAULT_COURSES[i]} | {MicroCourse(self.session, DEFAULT_COURSES[i], getCourseInfo(self.session, DEFAULT_COURSES[i])['Modules'][0]['Id'], getCourseInfo(self.session, DEFAULT_COURSES[i])['Name']).GetMicroCourseInfo()['StudyPercentage']:.1f}%"for i in range(len(DEFAULT_COURSES))
-                    ],
+                        f"""{
+                        get_course_info(self.session, DEFAULT_COURSES[i])['Name']} | {
+                        DEFAULT_COURSES[i]} | {
+                        MicroCourse(
+                            self.session,
+                            DEFAULT_COURSES[i],
+                            get_course_info(self.session, DEFAULT_COURSES[i])['Modules'][0]['Id'],
+                            get_course_info(self.session, DEFAULT_COURSES[i])['Name']
+                        ).get_micro_course_info()['study_percentage']:.1f}%"""
+                        for i in range(len(DEFAULT_COURSES))
+                    ]
                 )
             ])['courses']
             if len(courseList) == 0:
@@ -123,35 +174,69 @@ class Config:
                     course = prompt([
                         inquirer.Text(
                             name="courseId",
-                            message="请输入课程ID (输入0终止输入)")
+                            message="请输入课程ID (输入0终止输入)"
+                        )
                     ])["courseId"]
                     if course == "0":
                         break
                     try:
-                        getCourseInfo(self.session, course)
-                        logger.info(f"已添加课程: {getCourseInfo(self.session, course)['Name']}")
+                        get_course_info(self.session, course)
+                        logger.info(f"已添加课程: {get_course_info(self.session, course)['Name']}")
                         courseList.append(f" |{course}| ")
                     except ValueError:
                         logger.error("课程不存在，请重新输入课程ID")
             try:
                 for course in courseList:
-                    self.config['courses'].append({"Name": getCourseInfo(self.session, course.split('|')[1].strip())['Name'], "CourseId": course.split('|')[1].strip(), "ModuleId": getCourseInfo(self.session, course.split('|')[1].strip())['Modules'][0]['Id'], "MicroCourseDuration": MicroCourse(self.session, course.split('|')[1].strip(), getCourseInfo(self.session, course.split('|')[1].strip())['Modules'][0]['Id'], getCourseInfo(self.session, course.split('|')[1].strip())).GetMicroCourseInfo()['MicroCourseDuration']})
+                    course_info = get_course_info(self.session, course.split('|')[1].strip())
+                    video_info = MicroCourse(
+                        self.session,
+                        course.split('|')[1].strip(),
+                        course_info['Modules'][0]['Id'],
+                        course_info['Name']
+                    ).get_micro_course_info()
+                    self.config['courses'].append({
+                        "course_name": course_info['Name'],
+                        "course_id": course.split('|')[1].strip(),
+                        "module_id": course_info['Modules'][0]['Id'],
+                        "study_duration": video_info['study_duration'],
+                        "micro_course_duration": video_info['micro_course_duration']
+                    })
                 save(self.config)
                 logger.success("课程保存成功")
             except Exception as e:
-                logger.exception("课程保存失败!")
+                logger.error("课程保存失败!")
                 raise e
 
-    def run(self):
+    def load_config(self):
         try:
-            self.tryLogin()
-            self.microCourseConfig()
+            self.try_login()
+            if self.first_run == False:
+                run_info = prompt([
+                    inquirer.List(
+                        name="on_start",
+                        message="选择要进行的操作",
+                        choices=[
+                            "延续上次配置运行",
+                            "保留登录信息重新配置",
+                            "全新启动"
+                        ],
+                        default="延续上次配置运行"
+                    )
+                ])['on_start']
+                if run_info == "延续上次配置运行":
+                    logger.info("使用上次的配置文件")
+                    return
+                elif run_info == "保留登录信息重新配置":
+                    logger.info("重新配置课程")
+                    self.config['courses'] = []
+                    self.micro_course_config()
+                elif run_info == "全新启动":
+                    logger.info("全新启动")
+                    os.remove("config.json")
+                    Config().load_config()
+            else:
+                self.micro_course_config()
         except Exception as e:
             raise e
         finally:
             save(self.config)
-
-
-if __name__ == "__main__":
-    classconfig = Config()
-    classconfig.run()

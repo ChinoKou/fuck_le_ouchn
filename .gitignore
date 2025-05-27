@@ -172,3 +172,31 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# VSCode
+.vscode/
+
+#configuration files
+*.json
+*.yaml
+*.xml
+*.ini
+*.toml
+*.cfg
+*.conf
+
+#logs
+*.log
+*.log.*
+*.log.*.gz
+*.log.*.zip
+*.log.*.tar.gz
+*.log.*.tar.bz2
+*.log.*.tar.xz
+*.log.*.tar
+*.log.*.7z
+*.log.*.rar
+*.log.*.zip
+*.log.*.gz
+*.log.*.bz2
+*.log.*.xz

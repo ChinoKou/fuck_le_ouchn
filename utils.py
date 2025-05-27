@@ -14,10 +14,10 @@ def prompt(data):
     import inquirer
     return inquirer.prompt(data)
 
-def getCourseInfo(session, CourseId):
-    if CourseId == "":
+def get_course_info(session, course_id):
+    if course_id == "":
         raise ValueError("课程ID不能为空")
-    response = session.get(url=f"https://le.ouchn.cn/api/Course/{CourseId}/MicroCourse/Details")
+    response = session.get(url=f"https://le.ouchn.cn/api/Course/{course_id}/MicroCourse/Details")
     if response.status_code == 500:
         raise ValueError("课程ID错误")
     return response.json()['Data']

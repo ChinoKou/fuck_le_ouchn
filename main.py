@@ -3,8 +3,8 @@ from config import Config
 from requests import Session
 from traceback import print_exc
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from utils import load
 from api import MicroCourse
+from utils import load
 
 def clone_session(original):
     new = Session()
@@ -13,19 +13,20 @@ def clone_session(original):
 
 def main():
     cfg = Config()
-    cfg.run()
+    cfg.load_config()
     config = load()
-    with ThreadPoolExecutor(max_workers=16) as executor:
+    with ThreadPoolExecutor(max_workers=config['max_workers']) as executor:
         futures = [
             executor.submit(
-                lambda c=course: MicroCourse(
+                lambda c=course, idx=idx: MicroCourse(
                     clone_session(cfg.session),
-                    c['CourseId'],
-                    c['ModuleId'],
-                    c['Name']
+                    c['course_id'],
+                    c['module_id'],
+                    c['course_name'],
+                    idx + 1
                 ).run(),
             )
-            for course in config['courses']
+            for idx, course in enumerate(config['courses'])
         ]
         for future in as_completed(futures):
             try:
@@ -43,7 +44,7 @@ if __name__ == "__main__":
         logger.warning("捕获到程序运行异常！")
         logger.info("正在尝试保存报错文件...")
         try:
-            with open("latestErrorLog.log", "w", encoding="utf-8") as f:
+            with open("latest_error.log", "w", encoding="utf-8") as f:
                 print_exc(file=f)
         except Exception as inner_e:
             logger.error(f"保存错误日志失败: {inner_e}")
