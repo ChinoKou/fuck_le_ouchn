@@ -1,5 +1,9 @@
 # 终身教育平台自动刷课
 
+⚠️⚠️⚠️
+目前仍在开发中，项目有诸多bug，能用，但有很多问题
+⚠️⚠️⚠️
+
 ## 课程ID配置说明
 
 代码内预置16课程ID, 若要手动添加课程ID, 请按照以下步骤操作：
@@ -32,29 +36,12 @@ https://le.ouchn.cn/courseDetails/[课程ID]/
 # 创建虚拟环境
 python -m venv .venv
 
-# 安装依赖（使用阿里云镜像）
-pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple
-
 # 激活环境
 .venv\Scripts\activate
+
+# 安装依赖（使用阿里云镜像）
+pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple
 
 # 运行程序
 python main.py
 ```
-
-### Linux
-```bash
-# 创建虚拟环境
-python3 -m venv .venv
-
-# 安装依赖（使用阿里云镜像）
-pip3 install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple
-
-# 激活环境
-source .venv/bin/activate
-
-# 运行程序
-python3 main.py
-```
-
-> 注意：运行前请确保已安装Python 3.6+版本
