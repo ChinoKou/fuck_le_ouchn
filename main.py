@@ -1,6 +1,7 @@
 from loguru import logger
 from config import Config
 from requests import Session
+from time import sleep
 from traceback import print_exc
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from api import MicroCourse
@@ -49,3 +50,6 @@ if __name__ == "__main__":
                 print_exc(file=f)
         except Exception as inner_e:
             logger.error(f"保存错误日志失败: {inner_e}")
+    finally:
+        logger.info("将在10s后退出程序...")
+        sleep(10)
