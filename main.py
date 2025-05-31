@@ -38,6 +38,7 @@ def main():
 
 if __name__ == "__main__":
     try:
+        logger.info("程序开源地址: https://github.com/ChinoKou/fuck_le_ouchn")
         main()
         logger.success("所有微课已全部刷完")
     except KeyboardInterrupt:
