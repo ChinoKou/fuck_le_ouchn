@@ -38,6 +38,7 @@ def main():
 if __name__ == "__main__":
     try:
         main()
+        logger.success("所有微课已全部刷完")
     except KeyboardInterrupt:
         logger.info("已手动退出")
     except Exception as e:

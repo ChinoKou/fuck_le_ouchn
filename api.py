@@ -1,18 +1,44 @@
 import random
-from tqdm import tqdm
 from loguru import logger
+from requests import Session
 from time import sleep
 
 class MicroCourse:
-    def __init__(self, session, course_id, module_id, course_name, thread_id=None):
+    def __init__(self, session: Session, course_id, module_id, course_name, thread_id=None):
         self.session = session
         self.course_id = course_id
         self.module_id = module_id
         self.course_name = course_name
-        self.thread_id = f"Thread-{thread_id}:"
+        self.api_base_url = "https://le.ouchn.cn/api"
+        self.micro_course_base_url = f"""
+        {self.api_base_url}/Completion/Course/
+        {self.course_id}/Module/Video/
+        {self.module_id}/Session
+        """.replace(" ", "").replace("\n", "").strip()
+        if thread_id:
+            self.thread_id = f"Thread-{thread_id}:"
+        else:
+            self.thread_id = ""
+
+    def check_request_status(self, response, success_message = None):
+        request_details = {
+            "http_status_code": response.status_code,
+            "request_url": response.url,
+            "request_method": response.request.method,
+            "course_name": self.course_name,
+            "course_id": self.course_id,
+            "response_data": response.json()
+        }
+        if request_details["http_status_code"] == 200:
+            if success_message:
+               logger.success(success_message)
+            return request_details
+        else:
+            logger.error(f"{self.thread_id} api请求出错!\n{request_details}")
+            raise Exception(request_details)
 
     def get_micro_course_info(self):
-        url = f"https://le.ouchn.cn/api/Completion/Course/{self.course_id}/Module/Video/{self.module_id}/Session/Start?Origin=ouchn"
+        url = f"{self.micro_course_base_url}/Start?Origin=ouchn"
         data = {
             "CourseId": self.course_id,
             "ModuleId": self.module_id,
@@ -20,12 +46,13 @@ class MicroCourse:
             "Origin": "ouchn"
         }
         response = self.session.post(url=url, json=data)
-        if response.status_code == 200:
-            logger.success(f"成功获取微课 {self.course_name} 信息")
-        response = response.json()
-        self.session_id = response['Data']['SessionId']
-        self.study_duration = response['Data']['StudyDuration']
-        self.micro_course_duration = response['Data']['MicroCourseDuration']
+        request_details = self.check_request_status(
+            response=response,
+            success_message=f"成功获取微课 {self.course_name} 信息"
+        )['response_data']['Data']
+        self.session_id = request_details['SessionId']
+        self.study_duration = request_details['StudyDuration']
+        self.micro_course_duration = request_details['MicroCourseDuration']
         self.study_percentage = self.study_duration / self.micro_course_duration * 100
         return {
             "study_duration": self.study_duration,
@@ -34,7 +61,7 @@ class MicroCourse:
         }
 
     def process_micro_course(self, interrupt_data):
-        url = f"https://le.ouchn.cn/api/Completion/Course/{self.course_id}/Module/Video/{self.module_id}/Session/Process"
+        url = f"{self.micro_course_base_url}/Process"
         data = {
             "CourseId": self.course_id,
             "ModuleId": self.module_id,
@@ -44,21 +71,13 @@ class MicroCourse:
             "Origin": "ouchn"
         }
         response = self.session.post(url=url, json=data)
-        status_code = response.status_code
-        response = response.json()
-        if status_code == 200:
-            logger.success(f"{self.thread_id} 成功上报视频时间戳: {interrupt_data}")
-            pass
-        else:
-            logger.error(f"{self.thread_id} 上报视频时间戳失败: Http {status_code} error")
-            logger.error(f"{self.thread_id} status_code: {response['status']}")
-            logger.error(f"{self.thread_id} message: {response['title']}")
-            logger.error(f"{self.thread_id} errors: {response['errors']['$']}")
-            raise Exception(f"{self.thread_id} {self.course_name} - {self.course_id} - "+
-                            f"上报视频时间戳失败:\n{status_code} {response['title']}")
+        self.check_request_status(
+            response=response,
+            success_message=f"{self.thread_id} 成功上报视频时间戳: {interrupt_data}"
+        )
 
     def end_micro_course(self, interrupt_data):
-        url = f"https://le.ouchn.cn/api/Completion/Course/{self.course_id}/Module/Video/{self.module_id}/Session/End"
+        url = f"{self.micro_course_base_url}/End"
         data = {
             "CourseId": self.course_id,
             "ModuleId": self.module_id,
@@ -68,48 +87,42 @@ class MicroCourse:
             "Origin": "ouchn"
         }
         response = self.session.post(url=url, json=data)
-        if response.status_code == 200:
-            pass
-        else:
-            raise
+        self.check_request_status(response)
 
     def student_micro_course(self):
-        url = f"https://le.ouchn.cn/api/StudentCourse/{self.course_id}"
+        url = f"{self.api_base_url}/StudentCourse/{self.course_id}"
         data = {"CourseId": self.course_id}
         response = self.session.post(url=url, json=data)
-        if response.status_code == 200:
-            logger.success(f"{self.thread_id} 微课 {self.course_name} 学习记录上报成功")
-        else:
-            raise
+        self.check_request_status(
+            response=response,
+            success_message=f"{self.thread_id} 微课 {self.course_name} 学习记录上报成功"
+        )
 
     def run(self):
         try:
-            init_time = random.randint(1, 2)
             logger.info(f"{self.thread_id} 微课 {self.course_name} 刷课线程初始化")
-            logger.info(f"{self.thread_id} 微课 {self.course_name} 将在 {init_time:.1f}s 后开刷")
             logger.info(f"{self.thread_id} 微课 {self.course_name} 的 CourseId 为 {self.course_id}")
             logger.info(f"{self.thread_id} 微课 {self.course_name} 的 ModuleId 为 {self.module_id}")
             self.get_micro_course_info()
             self.student_micro_course()
-            self.last_study_duration = self.study_duration
-            sleep(init_time)
             for i in range(((self.micro_course_duration - self.study_duration) // 20) + 1):
                 logger.info(f"{self.thread_id} 正在准备微课 {self.course_name} 信息")
                 self.get_micro_course_info()
                 logger.info(f"{self.thread_id} 微课 {self.course_name} 已学习 {self.study_percentage:.2f}%")
-                self.last_study_duration = self.study_duration
                 interrupt_data = i * 20
                 if interrupt_data > self.micro_course_duration:
                     interrupt_data = self.micro_course_duration
-                wait_time = random.randint(10, 11)
-                logger.info(f"{self.thread_id} 微课 {self.course_name} 等待时间戳上报冷却 {wait_time}s")
+                wait_time = random.uniform(10, 11)
+                logger.info(f"{self.thread_id} 微课 {self.course_name} 等待时间戳上报冷却 {wait_time:.1f}s")
                 sleep(wait_time)
                 logger.info(f"{self.thread_id} 微课 {self.course_name} 当前 SessionId 为 {self.session_id}")
                 logger.info(f"{self.thread_id} 开始上报观看微课 {self.course_name}")
                 self.process_micro_course(str(interrupt_data))
                 logger.info(f"{self.thread_id} 开始刷新 SessionId")
                 self.end_micro_course(str(interrupt_data))
+            logger.success("====================================================")
             logger.success(f"{self.thread_id} {self.course_name} 完成进度 {self.study_percentage:.1f}%")
+            logger.success("====================================================")
         except Exception as e:
-            logger.error(f"{self.thread_id} 微课 {self.course_name} 运行出错")
+            logger.error(f"{self.thread_id} 微课 {self.course_name} 刷课线程运行出错")
             raise e
