@@ -25,9 +25,6 @@ python -m venv .venv
 # 激活环境
 .venv\Scripts\activate
 
-# 激活环境
-.venv\Scripts\activate
-
 # 安装依赖（使用阿里云镜像）
 pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple
 
