@@ -19,9 +19,9 @@ logger.add(LOG_FILE_NAME, rotation="5 MB", level="DEBUG")
 
 
 def main():
+    RUN_TIME = time.strftime("%Y-%m-%d", time.localtime())
+    ERROR_LOG_FILE_NAME = os.path.join(LOG_DIR, f"{RUN_TIME}_error.log")
     try:
-        RUN_TIME = time.strftime("%Y-%m-%d", time.localtime())
-        ERROR_LOG_FILE_NAME = os.path.join(LOG_DIR, f"{RUN_TIME}_error.log")
         cfg = Config()
         cfg.load_config()
         config = load()
