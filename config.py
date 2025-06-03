@@ -179,7 +179,7 @@ class Config:
                 logger.error("微课保存失败!")
                 raise e
         else:
-            check_micro_course_progress()
+            check_micro_course_progress(self)
 
     def load_config(self):
         if self.first_run == False:

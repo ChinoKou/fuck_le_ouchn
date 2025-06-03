@@ -44,7 +44,7 @@ def main():
                 except Exception as e:
                     logger.error("线程执行出错")
                     raise e
-        if not check_micro_course_progress():
+        if not check_micro_course_progress(cfg):
             logger.error("仍有微课未刷完,尝试重新启动程序!")
             raise Exception("微课未刷完,重新启动程序")
     except KeyboardInterrupt:

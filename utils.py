@@ -19,10 +19,8 @@ def clone_session(original):
     new.headers.update(original.headers.copy())
     return new
 
-def check_micro_course_progress():
+def check_micro_course_progress(cfg):
     from loguru import logger
-    from config import Config
-    cfg = Config()
     logger.info("正在检查微课完成进度")
     new_courses = []
     for course in cfg.config['courses']:
