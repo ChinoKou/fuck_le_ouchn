@@ -13,6 +13,32 @@ def prompt(data):
     import inquirer
     return inquirer.prompt(data)
 
+def clone_session(original):
+    from requests import Session
+    new = Session()
+    new.headers.update(original.headers.copy())
+    return new
+
+def check_micro_course_progress():
+    from loguru import logger
+    from config import Config
+    cfg = Config()
+    logger.info("正在检查微课完成进度")
+    new_courses = []
+    for course in cfg.config['courses']:
+        course_info = cfg.micro_course_cache(course['course_id'])
+        if course_info['study_percentage'] >= 100:
+            logger.info(f"微课 {course_info['course_name']} 已刷完, 从配置文件剔除")
+            continue
+        new_courses.append(course_info)
+    cfg.config['courses'] = new_courses
+    save(cfg.config)
+    if len(cfg.config['courses']) == 0:
+        logger.success("所有微课已刷完")
+        return True
+    else:
+        return False
+
 def get_micro_course_info(session, course_id):
     from api import MicroCourse
     if course_id == "":

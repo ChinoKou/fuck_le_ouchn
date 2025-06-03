@@ -100,8 +100,9 @@ class MicroCourse:
 
     def run(self):
         try:
-            init_time = random.uniform(0.5, 2)
+            init_time = random.uniform(1, 5)
             logger.info(f"{self.thread_id} 微课 {self.course_name} 刷课线程初始化")
+            logger.info(f"{self.thread_id} 微课 {self.course_name} 刷课线程在 {init_time:.1f}s 后启动")
             logger.info(f"{self.thread_id} 微课 {self.course_name} 的 CourseId 为 {self.course_id}")
             logger.info(f"{self.thread_id} 微课 {self.course_name} 的 ModuleId 为 {self.module_id}")
             self.get_micro_course_info()
@@ -122,6 +123,7 @@ class MicroCourse:
                 self.process_micro_course(str(interrupt_data))
                 logger.info(f"{self.thread_id} 开始刷新 SessionId")
                 self.end_micro_course(str(interrupt_data))
+            self.get_micro_course_info()
             logger.success("====================================================")
             logger.success(f"{self.thread_id} {self.course_name} 完成进度 {self.study_percentage:.1f}%")
             logger.success("====================================================")

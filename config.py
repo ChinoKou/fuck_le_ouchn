@@ -7,7 +7,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.support import expected_conditions as EC
-from utils import load, save, prompt, get_micro_course_info, get_web_driver
+from utils import load, save, prompt, check_micro_course_progress, get_micro_course_info, get_web_driver
 
 class Config:
     def __init__(self):
@@ -179,17 +179,7 @@ class Config:
                 logger.error("微课保存失败!")
                 raise e
         else:
-            logger.info("正在检查微课完成进度")
-            new_courses = []
-            for course in self.config['courses']:
-                course_info = self.micro_course_cache(course['course_id'])
-                if course_info['study_percentage'] >= 100:
-                    logger.info(f"微课 {course_info['course_name']} 已刷完, 从配置文件剔除")
-                    continue
-                new_courses.append(course_info)
-            self.config['courses'] = new_courses
-            save(self.config)
-
+            check_micro_course_progress()
 
     def load_config(self):
         if self.first_run == False:

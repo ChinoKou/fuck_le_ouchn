@@ -1,13 +1,12 @@
 import os
 import time
 from loguru import logger
-from config import Config
-from requests import Session
 from time import sleep
 from traceback import print_exc
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from api import MicroCourse
-from utils import load
+from config import Config
+from utils import load, clone_session, check_micro_course_progress
 
 LOG_DIR = "./logs"
 MAX_RETRY = 3
@@ -23,6 +22,9 @@ def init():
         ERROR_LOG_FILE_NAME = os.path.join(LOG_DIR, f"{START_TIME}_error.log")
         logger.add(LOG_FILE_NAME, rotation="5 MB", level="DEBUG")
         main()
+        if not check_micro_course_progress():
+            logger.error("仍有微课未刷完,尝试重新启动程序!")
+            raise Exception("微课未刷完,重新启动程序")
     except KeyboardInterrupt:
         raise KeyboardInterrupt
     except Exception as e:
@@ -36,11 +38,6 @@ def init():
             logger.error(f"保存错误日志失败: {inner_e}")
         finally:
             raise e
-
-def clone_session(original):
-    new = Session()
-    new.headers.update(original.headers.copy())
-    return new
 
 def main():
     cfg = Config()
