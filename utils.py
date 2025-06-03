@@ -19,19 +19,20 @@ def clone_session(original):
     new.headers.update(original.headers.copy())
     return new
 
-def check_micro_course_progress(cfg):
+def check_micro_course_progress(session):
     from loguru import logger
+    config = load()
     logger.info("正在检查微课完成进度")
     new_courses = []
-    for course in cfg.config['courses']:
-        course_info = cfg.micro_course_cache(course['course_id'])
+    for course in config['courses']:
+        course_info = get_micro_course_info(session, course['course_id'])
         if course_info['study_percentage'] >= 100:
             logger.info(f"微课 {course_info['course_name']} 已刷完, 从配置文件剔除")
             continue
         new_courses.append(course_info)
-    cfg.config['courses'] = new_courses
-    save(cfg.config)
-    if len(cfg.config['courses']) == 0:
+    config['courses'] = new_courses
+    save(config)
+    if len(config['courses']) == 0:
         logger.success("所有微课已刷完")
         return True
     else:
