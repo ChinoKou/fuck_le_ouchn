@@ -8,20 +8,42 @@ from api import MicroCourse
 from config import Config
 from utils import load, clone_session, check_micro_course_progress
 
+VERSION  = "1.1"
 LOG_DIR = "./logs"
 MAX_RETRY = 3
-
+START_TIME = time.strftime("%Y-%m-%d", time.localtime())
 if not os.path.exists(LOG_DIR):
     os.mkdir(LOG_DIR)
+LOG_FILE_NAME = os.path.join(LOG_DIR, f"{START_TIME}.log")
+logger.add(LOG_FILE_NAME, rotation="5 MB", level="DEBUG")
 
 
-def init():
+def main():
     try:
-        START_TIME = time.strftime("%Y-%m-%d", time.localtime())
-        LOG_FILE_NAME = os.path.join(LOG_DIR, f"{START_TIME}.log")
-        ERROR_LOG_FILE_NAME = os.path.join(LOG_DIR, f"{START_TIME}_error.log")
-        logger.add(LOG_FILE_NAME, rotation="5 MB", level="DEBUG")
-        main()
+        RUN_TIME = time.strftime("%Y-%m-%d", time.localtime())
+        ERROR_LOG_FILE_NAME = os.path.join(LOG_DIR, f"{RUN_TIME}_error.log")
+        cfg = Config()
+        cfg.load_config()
+        config = load()
+        with ThreadPoolExecutor(max_workers=config['max_workers']) as executor:
+            futures = [
+                executor.submit(
+                    lambda c=course, idx=idx: MicroCourse(
+                        clone_session(cfg.session),
+                        c['course_id'],
+                        c['module_id'],
+                        c['course_name'],
+                        idx + 1
+                    ).run(),
+                )
+                for idx, course in enumerate(config['courses'])
+            ]
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception as e:
+                    logger.error("线程执行出错")
+                    raise e
         if not check_micro_course_progress():
             logger.error("仍有微课未刷完,尝试重新启动程序!")
             raise Exception("微课未刷完,重新启动程序")
@@ -39,39 +61,16 @@ def init():
         finally:
             raise e
 
-def main():
-    cfg = Config()
-    cfg.load_config()
-    config = load()
-    with ThreadPoolExecutor(max_workers=config['max_workers']) as executor:
-        futures = [
-            executor.submit(
-                lambda c=course, idx=idx: MicroCourse(
-                    clone_session(cfg.session),
-                    c['course_id'],
-                    c['module_id'],
-                    c['course_name'],
-                    idx + 1
-                ).run(),
-            )
-            for idx, course in enumerate(config['courses'])
-        ]
-        for future in as_completed(futures):
-            try:
-                future.result()
-            except Exception as e:
-                logger.error("线程执行出错")
-                raise e
-
 if __name__ == "__main__":
     try:
         logger.info("程序开源地址: https://github.com/ChinoKou/fuck_le_ouchn")
+        logger.info(f"当前程序版本: {VERSION}")
         retries = 0
         while True:
             try:
                 if retries > 0:
                     logger.warning(f"第 {retries} 次重启程序!")
-                init()
+                main()
                 break
             except KeyboardInterrupt:
                 logger.info("已手动退出")
