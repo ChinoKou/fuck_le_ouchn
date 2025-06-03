@@ -39,6 +39,7 @@ def get_micro_course_info(session, course_id):
     return course_info
 
 def get_web_driver():
+    import os
     from loguru import logger
     from selenium import webdriver
     from requests.exceptions import ConnectionError
@@ -50,6 +51,26 @@ def get_web_driver():
     from selenium.webdriver.chrome.service import Service as ChromeService
     from selenium.webdriver.firefox.service import Service as FirefoxService
 
+    logger.info("初次运行可能耗时较长")
+    browser_paths = {
+        'Chrome': [
+            os.path.join(os.getenv('PROGRAMFILES'), 'Google', 'Chrome', 'Application', 'chrome.exe'),
+            os.path.join(os.getenv('LOCALAPPDATA'), 'Google', 'Chrome', 'Application', 'chrome.exe')
+        ],
+        'Edge': [
+            os.path.join(os.getenv('PROGRAMFILES'), 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+            os.path.join(os.getenv('LOCALAPPDATA'), 'Microsoft', 'Edge', 'Application', 'msedge.exe')
+        ],
+        'Firefox': [
+            os.path.join(os.getenv('PROGRAMFILES'), 'Mozilla Firefox', 'firefox.exe'),
+            os.path.join(os.getenv('LOCALAPPDATA'), 'Mozilla Firefox', 'firefox.exe')
+        ]
+    }
+    browser_check = {
+        'Chrome': lambda: any(os.path.exists(p) for p in browser_paths['Chrome']),
+        'Edge': lambda: any(os.path.exists(p) for p in browser_paths['Edge']),
+        'Firefox': lambda: any(os.path.exists(p) for p in browser_paths['Firefox'])
+    }
     web_drivers = [
         ('Chrome', webdriver.Chrome, ChromeService),
         ('Firefox', webdriver.Firefox, FirefoxService),
@@ -61,6 +82,9 @@ def get_web_driver():
         'Edge': EdgeChromiumDriverManager
     }
     for name, driver_class, service_class in web_drivers:
+        if not browser_check[name]():
+            logger.warning(f"{name} 浏览器未安装，跳过初始化")
+            continue
         try:
             logger.info(f"尝试调用 {name}")
             driver_options = {

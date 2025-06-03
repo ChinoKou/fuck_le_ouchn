@@ -1,3 +1,5 @@
+import os
+import time
 from loguru import logger
 from config import Config
 from requests import Session
@@ -6,6 +8,17 @@ from traceback import print_exc
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from api import MicroCourse
 from utils import load
+
+LOG_DIR = "./logs"
+START_TIME = time.strftime("%Y-%m-%d", time.localtime())
+
+if not os.path.exists(LOG_DIR):
+    os.mkdir(LOG_DIR)
+
+LOG_FILE_NAME = os.path.join(LOG_DIR, f"{START_TIME}.log")
+ERROR_LOG_FILE_NAME = os.path.join(LOG_DIR, f"{START_TIME}_error.log")
+logger.add(LOG_FILE_NAME, rotation="5 MB", level="DEBUG")
+
 
 def clone_session(original):
     new = Session()
@@ -40,14 +53,13 @@ if __name__ == "__main__":
     try:
         logger.info("程序开源地址: https://github.com/ChinoKou/fuck_le_ouchn")
         main()
-        logger.success("所有微课已全部刷完")
     except KeyboardInterrupt:
         logger.info("已手动退出")
     except Exception as e:
         logger.warning("捕获到程序运行异常！")
         logger.info("正在尝试保存报错文件...")
         try:
-            with open("latest_error.log", "w", encoding="utf-8") as f:
+            with open(ERROR_LOG_FILE_NAME, "w", encoding="utf-8") as f:
                 print_exc(file=f)
         except Exception as inner_e:
             logger.error(f"保存错误日志失败: {inner_e}")

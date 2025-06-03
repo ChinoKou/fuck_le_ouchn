@@ -100,11 +100,13 @@ class MicroCourse:
 
     def run(self):
         try:
+            init_time = random.uniform(0.5, 2)
             logger.info(f"{self.thread_id} 微课 {self.course_name} 刷课线程初始化")
             logger.info(f"{self.thread_id} 微课 {self.course_name} 的 CourseId 为 {self.course_id}")
             logger.info(f"{self.thread_id} 微课 {self.course_name} 的 ModuleId 为 {self.module_id}")
             self.get_micro_course_info()
             self.student_micro_course()
+            sleep(init_time)    #避免频繁调用api高并发被服务器阻断,别问为什么加回来了
             for i in range(((self.micro_course_duration - self.study_duration) // 20) + 1):
                 logger.info(f"{self.thread_id} 正在准备微课 {self.course_name} 信息")
                 self.get_micro_course_info()
