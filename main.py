@@ -10,15 +10,32 @@ from api import MicroCourse
 from utils import load
 
 LOG_DIR = "./logs"
-START_TIME = time.strftime("%Y-%m-%d", time.localtime())
+MAX_RETRY = 3
 
 if not os.path.exists(LOG_DIR):
     os.mkdir(LOG_DIR)
 
-LOG_FILE_NAME = os.path.join(LOG_DIR, f"{START_TIME}.log")
-ERROR_LOG_FILE_NAME = os.path.join(LOG_DIR, f"{START_TIME}_error.log")
-logger.add(LOG_FILE_NAME, rotation="5 MB", level="DEBUG")
 
+def init():
+    try:
+        START_TIME = time.strftime("%Y-%m-%d", time.localtime())
+        LOG_FILE_NAME = os.path.join(LOG_DIR, f"{START_TIME}.log")
+        ERROR_LOG_FILE_NAME = os.path.join(LOG_DIR, f"{START_TIME}_error.log")
+        logger.add(LOG_FILE_NAME, rotation="5 MB", level="DEBUG")
+        main()
+    except KeyboardInterrupt:
+        raise KeyboardInterrupt
+    except Exception as e:
+        logger.warning("捕获到程序运行异常！")
+        logger.info("正在尝试保存报错日志...")
+        try:
+            with open(ERROR_LOG_FILE_NAME, "w", encoding="utf-8") as f:
+                print_exc(file=f)
+            logger.success("错误日志保存成功")
+        except Exception as inner_e:
+            logger.error(f"保存错误日志失败: {inner_e}")
+        finally:
+            raise e
 
 def clone_session(original):
     new = Session()
@@ -52,17 +69,24 @@ def main():
 if __name__ == "__main__":
     try:
         logger.info("程序开源地址: https://github.com/ChinoKou/fuck_le_ouchn")
-        main()
-    except KeyboardInterrupt:
-        logger.info("已手动退出")
-    except Exception as e:
-        logger.warning("捕获到程序运行异常！")
-        logger.info("正在尝试保存报错文件...")
-        try:
-            with open(ERROR_LOG_FILE_NAME, "w", encoding="utf-8") as f:
-                print_exc(file=f)
-        except Exception as inner_e:
-            logger.error(f"保存错误日志失败: {inner_e}")
-    finally:
+        retries = 0
+        while True:
+            try:
+                if retries > 0:
+                    logger.warning(f"第 {retries} 次重启程序!")
+                init()
+                break
+            except KeyboardInterrupt:
+                logger.info("已手动退出")
+                break
+            except Exception as e:
+                if retries >= MAX_RETRY:
+                    logger.error("重试次数过多,若有bug,请提交issue!")
+                    break
+                logger.info(f"将在10s后重新启动({retries + 1}/{MAX_RETRY})...")
+                sleep(10)
+                retries += 1
         logger.info("将在10s后退出程序...")
         sleep(10)
+    except KeyboardInterrupt:
+        logger.info("用户强制终止")

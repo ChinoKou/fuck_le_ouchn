@@ -10,11 +10,12 @@
 ## 运行
 ### 运行可执行文件
 
-可前往 [release](https://github.com/ChinoKou/fuck_le_ouchn/releases#latest) 下载可执行文件  
-或者前往 [镜像](https://chinokou.cn/download/ouchn.exe) 下载 (可能更新不及时)  
+可前往 [release](https://github.com/ChinoKou/fuck_le_ouchn/releases/latest) 下载可执行文件  
+或者前往 [镜像](https://chinokou.cn/download/ouchn.exe) 下载 (可能更新不及时,大陆可直连)  
 
 ### 运行源代码
 ```powershell
+# Windows python 3.12+环境测试通过,其他没测试
 # 克隆代码
 git clone https://github.com/ChinoKou/fuck_le_ouchn.git
 
