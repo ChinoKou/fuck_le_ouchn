@@ -84,6 +84,7 @@ def get_web_driver():
         ],
         'Edge': [
             os.path.join(os.getenv('PROGRAMFILES'), 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+            os.path.join(os.getenv('PROGRAMFILES(X86)', ''), 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
             os.path.join(os.getenv('LOCALAPPDATA'), 'Microsoft', 'Edge', 'Application', 'msedge.exe')
         ],
         'Firefox': [

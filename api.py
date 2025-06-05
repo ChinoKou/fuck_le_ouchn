@@ -111,6 +111,8 @@ class MicroCourse:
             for i in range(((self.micro_course_duration - self.study_duration) // 20) + 1):
                 logger.info(f"{self.thread_id} 正在准备微课 {self.course_name} 信息")
                 self.get_micro_course_info()
+                if self.study_percentage >= 100:
+                    break
                 logger.info(f"{self.thread_id} 微课 {self.course_name} 已学习 {self.study_percentage:.2f}%")
                 interrupt_data = i * 20
                 if interrupt_data > self.micro_course_duration:
