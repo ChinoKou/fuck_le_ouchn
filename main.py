@@ -1,12 +1,13 @@
 import os
 import time
+import inquirer
 from loguru import logger
 from time import sleep
 from traceback import print_exc
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from api import MicroCourse
 from config import Config
-from utils import load, clone_session, check_micro_course_progress
+from utils import load, save, prompt, clone_session, check_micro_course_progress
 
 VERSION  = "1.1"
 LOG_DIR = "./logs"
@@ -49,6 +50,16 @@ def main():
             raise Exception("微课未刷完,重新启动程序")
     except KeyboardInterrupt:
         raise KeyboardInterrupt
+    except RuntimeError as e:
+        config = load()
+        config['use_browser_check'] = not prompt([
+            inquirer.Confirm(
+                name="confirm",
+                message="是否要取消浏览器安装检查? (可能修复无法调用浏览器,但会导致启动浏览器较慢)"
+            )
+        ])['confirm']
+        save(config)
+        raise e
     except Exception as e:
         logger.warning("捕获到程序运行异常！")
         logger.info("正在尝试保存报错日志...")
@@ -79,8 +90,8 @@ if __name__ == "__main__":
                 if retries >= MAX_RETRY:
                     logger.error("重试次数过多,若有bug,请提交issue!")
                     break
-                logger.info(f"将在10s后重新启动({retries + 1}/{MAX_RETRY})...")
-                sleep(10)
+                logger.info(f"将在5s后重新启动({retries + 1}/{MAX_RETRY})...")
+                sleep(5)
                 retries += 1
         logger.info("将在10s后退出程序...")
         sleep(10)

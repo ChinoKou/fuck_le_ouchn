@@ -26,6 +26,8 @@ class Config:
                 default=16,
                 validate=lambda _, x: x.isdigit() or "请输入数字"
             )])['max_workers'])
+        if "use_browser_check" not in self.config:
+            self.config['use_browser_check'] = True
         if "cookies" not in self.config:
             self.config["cookies"] = {}
 

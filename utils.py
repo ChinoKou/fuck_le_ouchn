@@ -77,6 +77,7 @@ def get_web_driver():
     from selenium.webdriver.firefox.service import Service as FirefoxService
 
     logger.info("初次运行可能耗时较长")
+    config = load()
     browser_paths = {
         'Chrome': [
             os.path.join(os.getenv('PROGRAMFILES'), 'Google', 'Chrome', 'Application', 'chrome.exe'),
@@ -108,7 +109,7 @@ def get_web_driver():
         'Edge': EdgeChromiumDriverManager
     }
     for name, driver_class, service_class in web_drivers:
-        if not browser_check[name]():
+        if not browser_check[name]() and config['use_browser_check'] == True:
             logger.warning(f"{name} 浏览器未安装，跳过初始化")
             continue
         try:
