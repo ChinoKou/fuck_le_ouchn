@@ -299,6 +299,7 @@ class OuchnUtils:
 
     def micro_course_config(self):
         course_id_list = []
+        self.cfg.update(["course_list"], {})
         choices = prompt([
             inquirer.Checkbox(
                 name="choice",
