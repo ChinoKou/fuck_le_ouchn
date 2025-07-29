@@ -11,7 +11,7 @@ class Config:
         self.on_load()
 
     def on_load(self):
-        if os.path.exists("config.json"):
+        if os.path.exists("ouchn_config.json"):
             self.load()
             logger.debug("配置文件加载成功")
             if self.config.get("version") != self.config_version:
@@ -28,11 +28,11 @@ class Config:
             self.load()
 
     def load(self):
-        with open("config.json", "r", encoding="UTF-8") as f:
+        with open("ouchn_config.json", "r", encoding="UTF-8") as f:
             self.config = json.loads(f.read())
 
     def save(self):
-        with open("config.json", "w", encoding="utf-8") as f:
+        with open("ouchn_config.json", "w", encoding="utf-8") as f:
             f.write(json.dumps(self.config, indent=4, ensure_ascii=False))
         return
 
@@ -63,7 +63,7 @@ class Config:
         self.update(["max_workers"], max_workers)
 
     def reset(self):
-        os.remove("config.json")
+        os.remove("ouchn_config.json")
         self.on_load()
 
 if __name__ == "__main__":

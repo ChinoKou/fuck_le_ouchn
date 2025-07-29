@@ -166,7 +166,7 @@ class Login:
         response_data = response.get("Data")
         name = response_data.get("Name")
         nick_name = response_data.get("Nickname")
-        logger.success(f"登录成功, 名字 - {name}, 昵称 - {nick_name}")
+        logger.success(f"登录态已确认, 名字 - {name}, 昵称 - {nick_name}")
 
 
 class OuchnUtils:
@@ -203,6 +203,28 @@ class OuchnUtils:
             }
         return micro_info
 
+    def auto_fetch_course_id(self):
+        url = f"{self.base_url}/Completion/Course/Paging"
+        params = {
+            "PageNum": 1,
+            "PageSize": 10
+        }
+        response, status = HttpClient().get(url, params=params)
+        if not status:
+            logger.error("获取学习记录失败")
+            return []
+        logger.success("获取学习记录成功")
+        course_id_list = []
+        response = response.json()
+        response_data = response["Data"]
+        for course_info in response_data.get("PageListInfos"):
+            if course_info.get("CompletionStatus") == "NotAttempted":
+                _course_info = self.micro_course_cache(course_info.get("CourseId"))
+                logger.info(f"已添加微课: {_course_info.get("course_name")}, 共 {len(_course_info.get("module_list"))} 集")
+                course_id_list.append(course_info.get("CourseId"))
+        logger.info("已添加尚未学习完成的微课")
+        return course_id_list
+
     def get_study_info(self, course_id, module_id, course_name):
         micro_course = MicroCourse(course_id, module_id, course_name)
         micro_course.start_micro_course()
@@ -214,6 +236,7 @@ class OuchnUtils:
         return study_info
 
     def check_micro_course_progress(self):
+        logger.info("正在检查微课完成进度")
         def check_module_progress(course_id, course_info, module_id, module_info):
             study_info = self.get_study_info(course_id, module_id, module_info.get("module_name"))
             study_percentage_str = f"{study_info.get('study_percentage'):.2f}%"
@@ -272,6 +295,25 @@ class OuchnUtils:
         return self.micro_course_cache(course_id)
 
     def micro_course_config(self):
+        course_id_list = []
+        choices = prompt([
+            inquirer.Checkbox(
+                name="choice",
+                message="请选择以何种方式配置刷课信息 (按空格键选择, 可多选, 回车键确定)",
+                choices=["从个人中心-学习记录自动获取", "手动输入课程链接"]
+            )
+        ])["choice"]
+        for choice in choices:
+            if choice == "从个人中心-学习记录自动获取":
+                course_id_list.extend(self.auto_fetch_course_id())
+            elif choice == "手动输入课程链接":
+                course_id_list.extend(self.manual_input_course_id())
+        for course_id in course_id_list:
+            self.cfg.update(["course_list", course_id], self.micro_course_cache(course_id))
+        logger.success("微课保存成功")
+        self.check_micro_course_progress()
+
+    def manual_input_course_id(self):
         try:
             course_id_list = []
             while True:
@@ -292,10 +334,7 @@ class OuchnUtils:
                     logger.error("微课不存在, 请重新输入微课链接")
         except KeyboardInterrupt:
                 logger.info("用户强制终止微课输入")
-        for course_id in course_id_list:
-            self.cfg.update(["course_list", course_id], self.micro_course_cache(course_id))
-        logger.success("微课保存成功")
-        self.check_micro_course_progress()
+        return course_id_list
 
     def confirm_config(self):
         if len(self.cfg.get_value(["course_list"])) > 0:

@@ -188,7 +188,7 @@ def get_web_driver():
 def get_logger(debug=False):
     from sys import stderr
     from time import strftime, localtime
-    LOG_DIR = "./logs"
+    LOG_DIR = "./ouchn_logs"
     START_TIME = strftime("%Y-%m-%d", localtime())
     if not os.path.exists(LOG_DIR):
         os.mkdir(LOG_DIR)

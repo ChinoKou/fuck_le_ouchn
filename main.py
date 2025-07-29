@@ -10,19 +10,19 @@ from api import *
 VERSION  = "2.0"
 
 def main():
-    Login().try_login()
     while True:
         cfg = Config()
+        Login().try_login()
         ouchn_utils = OuchnUtils()
+        menu_choices = ["配置刷课信息", "开始刷课", "配置最大线程数", "重新登录", "清理刷完课程", "恢复出厂设置", "退出"]
+        if cfg.get_value(["debug"]):
+            menu_choices.append("输出debug日志")
         try:
             func_choice = prompt([
                 inquirer.List(
                     name="menu",
                     message="主菜单,请选择接下来的操作",
-                    choices=[
-                        "配置刷课信息", "开始刷课", "配置最大线程数",
-                        "重新登录", "清理刷完课程", "恢复出厂设置", "退出"
-                    ]
+                    choices=menu_choices
                 )
             ])["menu"]
             if func_choice == "配置刷课信息":
@@ -77,6 +77,9 @@ def main():
             elif func_choice == "恢复出厂设置":
                 logger.info("恢复出厂设置")
                 cfg.reset()
+                return main()
+            elif func_choice == "输出debug日志":
+                get_logger(debug=True)
             elif func_choice == "退出":
                 logger.info("退出")
                 exit()
