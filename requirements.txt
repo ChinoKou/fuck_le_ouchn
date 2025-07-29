@@ -1,6 +1,6 @@
 loguru
 inquirer
-requests
+httpx[http2]
 selenium
 webdriver-manager
 webdrivermanager_cn

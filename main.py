@@ -1,98 +1,99 @@
-import os
-import time
 import inquirer
 from loguru import logger
 from time import sleep
-from traceback import print_exc
+from sys import exit
+from traceback import format_exc
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from api import MicroCourse
 from config import Config
-from utils import load, save, prompt, clone_session, check_micro_course_progress
+from api import *
 
-VERSION  = "1.1"
-LOG_DIR = "./logs"
-MAX_RETRY = 3
-START_TIME = time.strftime("%Y-%m-%d", time.localtime())
-if not os.path.exists(LOG_DIR):
-    os.mkdir(LOG_DIR)
-LOG_FILE_NAME = os.path.join(LOG_DIR, f"{START_TIME}.log")
-logger.add(LOG_FILE_NAME, rotation="5 MB", level="DEBUG")
-
+VERSION  = "2.0"
 
 def main():
-    RUN_TIME = time.strftime("%Y-%m-%d", time.localtime())
-    ERROR_LOG_FILE_NAME = os.path.join(LOG_DIR, f"{RUN_TIME}_error.log")
-    try:
+    Login().try_login()
+    while True:
         cfg = Config()
-        cfg.load_config()
-        config = load()
-        with ThreadPoolExecutor(max_workers=config['max_workers']) as executor:
-            futures = [
-                executor.submit(
-                    lambda c=course, idx=idx: MicroCourse(
-                        clone_session(cfg.session),
-                        c['course_id'],
-                        c['module_id'],
-                        c['course_name'],
-                        idx + 1
-                    ).run(),
-                )
-                for idx, course in enumerate(config['courses'])
-            ]
-            for future in as_completed(futures):
-                try:
-                    future.result()
-                except Exception as e:
-                    logger.error("线程执行出错")
-                    raise e
-        if not check_micro_course_progress(cfg.session):
-            logger.error("仍有微课未刷完,尝试重新启动程序!")
-            raise Exception("微课未刷完,重新启动程序")
-    except KeyboardInterrupt:
-        raise KeyboardInterrupt
-    except RuntimeError as e:
-        config = load()
-        config['use_browser_check'] = not prompt([
-            inquirer.Confirm(
-                name="confirm",
-                message="是否要取消浏览器安装检查? (可能修复无法调用浏览器,但会导致启动浏览器较慢)"
-            )
-        ])['confirm']
-        save(config)
-        raise e
-    except Exception as e:
-        logger.warning("捕获到程序运行异常！")
-        logger.info("正在尝试保存报错日志...")
+        ouchn_utils = OuchnUtils()
         try:
-            with open(ERROR_LOG_FILE_NAME, "w", encoding="utf-8") as f:
-                print_exc(file=f)
-            logger.success("错误日志保存成功")
-        except Exception as inner_e:
-            logger.error(f"保存错误日志失败: {inner_e}")
-        finally:
-            raise e
+            func_choice = prompt([
+                inquirer.List(
+                    name="menu",
+                    message="主菜单,请选择接下来的操作",
+                    choices=[
+                        "配置刷课信息", "开始刷课", "配置最大线程数",
+                        "重新登录", "清理刷完课程", "恢复出厂设置", "退出"
+                    ]
+                )
+            ])["menu"]
+            if func_choice == "配置刷课信息":
+                if not ouchn_utils.confirm_config():
+                    ouchn_utils.micro_course_config()
+                elif prompt([
+                    inquirer.Confirm(
+                        name="confirm",
+                        message="已存在以上刷课信息，是否要重新配置？",
+                        default=True
+                    )
+                ])["confirm"]:
+                    logger.info("重新配置刷课信息")
+                    ouchn_utils.micro_course_config()
+            elif func_choice == "开始刷课":
+                if not ouchn_utils.confirm_config():
+                    logger.warning("未配置刷课信息或刷课信息有误")
+                    continue
+                elif not prompt([
+                    inquirer.Confirm(
+                        name="confirm",
+                        message="请确认是否以当前刷课配置启动刷课",
+                        default=True
+                    )
+                ])["confirm"]:
+                    continue
+                logger.info("开始刷课")
+                with ThreadPoolExecutor(max_workers=cfg.config["max_workers"]) as executor:
+                    futures = [
+                        executor.submit(
+                            MicroCourse(course_id, module_id, module_info["module_name"]).run,
+                        )
+                        for course_id, course_info in cfg.get_value(["course_list"]).items()
+                        for module_id, module_info in course_info["module_list"].items()
+                    ]
+                    for future in as_completed(futures):
+                        try:
+                            future.result()
+                        except Exception as e:
+                            logger.error("线程执行出错")
+                            raise e
+                ouchn_utils.check_micro_course_progress()
+            elif func_choice == "配置最大线程数":
+                logger.info("配置最大线程数")
+                cfg.max_workers_config()
+            elif func_choice == "重新登录":
+                logger.info("正在重新登录")
+                ouchn_utils.relogin()
+            elif func_choice == "清理刷完课程":
+                logger.info("清理刷完课程")
+                ouchn_utils.check_micro_course_progress()
+            elif func_choice == "恢复出厂设置":
+                logger.info("恢复出厂设置")
+                cfg.reset()
+            elif func_choice == "退出":
+                logger.info("退出")
+                exit()
+        except KeyboardInterrupt:
+            continue
+        except Exception as e:
+            logger.error("捕获到程序运行异常！")
+            logger.error(f"\n{format_exc()}")
+            # logger.exception()
+            break
 
 if __name__ == "__main__":
     try:
+        get_logger()
         logger.info("程序开源地址: https://github.com/ChinoKou/fuck_le_ouchn")
         logger.info(f"当前程序版本: {VERSION}")
-        retries = 0
-        while True:
-            try:
-                if retries > 0:
-                    logger.warning(f"第 {retries} 次重启程序!")
-                main()
-                break
-            except KeyboardInterrupt:
-                logger.info("已手动退出")
-                break
-            except Exception as e:
-                if retries >= MAX_RETRY:
-                    logger.error("重试次数过多,若有bug,请提交issue!")
-                    break
-                logger.info(f"将在5s后重新启动({retries + 1}/{MAX_RETRY})...")
-                sleep(5)
-                retries += 1
+        main()
         logger.info("将在10s后退出程序...")
         sleep(10)
     except KeyboardInterrupt:

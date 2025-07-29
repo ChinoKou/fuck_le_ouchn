@@ -1,11 +1,15 @@
 import random
+import inquirer
 from loguru import logger
-from requests import Session
 from time import sleep
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from config import Config
+from utils import *
+
 
 class MicroCourse:
-    def __init__(self, session: Session, course_id, module_id, course_name, thread_id=None):
-        self.session = session
+    def __init__(self, course_id, module_id, course_name):
+        self.client = HttpClient()
         self.course_id = course_id
         self.module_id = module_id
         self.course_name = course_name
@@ -15,54 +19,32 @@ class MicroCourse:
         {self.course_id}/Module/Video/
         {self.module_id}/Session
         """.replace(" ", "").replace("\n", "").strip()
-        if thread_id:
-            self.thread_id = f"Thread-{thread_id}:"
-        else:
-            self.thread_id = ""
 
-    def check_request_status(self, response, success_message = None):
-        request_details = {
-            "http_status_code": response.status_code,
-            "request_url": response.url,
-            "request_method": response.request.method,
-            "course_name": self.course_name,
-            "course_id": self.course_id,
-            "response_data": response.json()
-        }
-        if request_details["http_status_code"] == 200:
-            if success_message:
-               logger.success(success_message)
-            return request_details
-        else:
-            logger.error(f"{self.thread_id} api请求出错!\n{request_details}")
-            raise Exception(request_details)
-
-    def get_micro_course_info(self):
-        url = f"{self.micro_course_base_url}/Start?Origin=ouchn"
-        data = {
+    def start_micro_course(self):
+        url = f"{self.micro_course_base_url}/Start"
+        req_body = {
             "CourseId": self.course_id,
             "ModuleId": self.module_id,
             "ModuleType": "Video",
             "Origin": "ouchn"
         }
-        response = self.session.post(url=url, json=data)
-        request_details = self.check_request_status(
-            response=response,
-            success_message=f"成功获取微课 {self.course_name} 信息"
-        )['response_data']['Data']
-        self.session_id = request_details['SessionId']
-        self.study_duration = request_details['StudyDuration']
-        self.micro_course_duration = request_details['MicroCourseDuration']
-        self.study_percentage = self.study_duration / self.micro_course_duration * 100
-        return {
-            "study_duration": self.study_duration,
-            "micro_course_duration": self.micro_course_duration,
-            "study_percentage": self.study_percentage
+        params = {
+            "Origin": "ouchn"
         }
+        response, status = self.client.post(url=url, json_data=req_body, params=params)
+        if not status:
+            logger.error("获取课程学习信息失败")
+            raise
+        response = response.json()
+        response_data = response.get("Data")
+        self.session_id = response_data.get("SessionId")
+        self.study_duration = response_data.get("StudyDuration")
+        self.micro_course_duration = response_data.get("MicroCourseDuration")
+        self.study_percentage = self.study_duration / self.micro_course_duration * 100
 
     def process_micro_course(self, interrupt_data):
         url = f"{self.micro_course_base_url}/Process"
-        data = {
+        req_body = {
             "CourseId": self.course_id,
             "ModuleId": self.module_id,
             "SessionId": self.session_id,
@@ -70,15 +52,15 @@ class MicroCourse:
             "ModuleType": "Video",
             "Origin": "ouchn"
         }
-        response = self.session.post(url=url, json=data)
-        self.check_request_status(
-            response=response,
-            success_message=f"{self.thread_id} 成功上报视频时间戳: {interrupt_data}"
-        )
+        _, status = self.client.post(url=url, json_data=req_body)
+        if not status:
+            logger.error("上报进度失败")
+            raise
+        logger.debug(f"微课 {self.course_name} 成功上报视频时间戳: {interrupt_data}")
 
     def end_micro_course(self, interrupt_data):
         url = f"{self.micro_course_base_url}/End"
-        data = {
+        req_body = {
             "CourseId": self.course_id,
             "ModuleId": self.module_id,
             "SessionId": self.session_id,
@@ -86,49 +68,270 @@ class MicroCourse:
             "ModuleType": "Video",
             "Origin": "ouchn"
         }
-        response = self.session.post(url=url, json=data)
-        self.check_request_status(response)
-
-    def student_micro_course(self):
-        url = f"{self.api_base_url}/StudentCourse/{self.course_id}"
-        data = {"CourseId": self.course_id}
-        response = self.session.post(url=url, json=data)
-        self.check_request_status(
-            response=response,
-            success_message=f"{self.thread_id} 微课 {self.course_name} 学习记录上报成功"
-        )
+        _, status = self.client.post(url=url, json_data=req_body)
+        if not status:
+            logger.error("提交微课进度失败")
+            raise
 
     def run(self):
         try:
-            init_time = random.uniform(1, 5)
-            logger.info(f"{self.thread_id} 微课 {self.course_name} 刷课线程初始化")
-            logger.info(f"{self.thread_id} 微课 {self.course_name} 刷课线程在 {init_time:.1f}s 后启动")
-            logger.info(f"{self.thread_id} 微课 {self.course_name} 的 CourseId 为 {self.course_id}")
-            logger.info(f"{self.thread_id} 微课 {self.course_name} 的 ModuleId 为 {self.module_id}")
-            self.get_micro_course_info()
-            self.student_micro_course()
-            sleep(init_time)    #避免频繁调用api高并发被服务器阻断,别问为什么加回来了
+            init_time = random.uniform(1, 3)
+            logger.info(f"微课 {self.course_name} 刷课线程将在 {2 * init_time:.1f}s 后启动")
+            logger.debug(f"微课 {self.course_name} 的 CourseId 为 {self.course_id}")
+            logger.debug(f"微课 {self.course_name} 的 ModuleId 为 {self.module_id}")
+            OuchnUtils().student_micro_course(self.course_id, self.course_name)
+            sleep(init_time)
+            self.start_micro_course()
+            sleep(init_time)
             for i in range(((self.micro_course_duration - self.study_duration) // 20) + 1):
-                logger.info(f"{self.thread_id} 正在准备微课 {self.course_name} 信息")
-                self.get_micro_course_info()
+                logger.debug(f"正在准备微课 {self.course_name} 信息")
+                self.start_micro_course()
                 if self.study_percentage >= 100:
                     break
-                logger.info(f"{self.thread_id} 微课 {self.course_name} 已学习 {self.study_percentage:.2f}%")
                 interrupt_data = i * 20
                 if interrupt_data > self.micro_course_duration:
                     interrupt_data = self.micro_course_duration
                 wait_time = random.uniform(10, 11)
-                logger.info(f"{self.thread_id} 微课 {self.course_name} 等待时间戳上报冷却 {wait_time:.1f}s")
+                logger.debug(f"微课 {self.course_name} 等待时间戳上报冷却 {wait_time:.1f}s")
                 sleep(wait_time)
-                logger.info(f"{self.thread_id} 微课 {self.course_name} 当前 SessionId 为 {self.session_id}")
-                logger.info(f"{self.thread_id} 开始上报观看微课 {self.course_name}")
+                logger.debug(f"微课 {self.course_name} 当前 SessionId 为 {self.session_id}")
+                logger.debug(f"开始上报观看微课 {self.course_name}")
                 self.process_micro_course(str(interrupt_data))
-                logger.info(f"{self.thread_id} 开始刷新 SessionId")
+                logger.debug(f"开始刷新 SessionId")
                 self.end_micro_course(str(interrupt_data))
-            self.get_micro_course_info()
+            self.start_micro_course()
             logger.success("====================================================")
-            logger.success(f"{self.thread_id} {self.course_name} 完成进度 {self.study_percentage:.1f}%")
+            logger.success(f"{self.course_name} 已刷完")
             logger.success("====================================================")
         except Exception as e:
-            logger.error(f"{self.thread_id} 微课 {self.course_name} 刷课线程运行出错")
+            logger.error(f"微课 {self.course_name} 刷课线程运行出错")
             raise e
+
+
+class Login:
+    def to_login(self):
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions
+        from selenium.common.exceptions import WebDriverException
+        cfg = Config()
+        while True:
+            try:
+                driver = get_web_driver()
+            except RuntimeError as e:
+                use_browser_check = not prompt([
+                    inquirer.Confirm(
+                        name="confirm",
+                        message="是否要取消浏览器安装检查? (可能修复无法调用浏览器,但会导致启动浏览器较慢)"
+                    )
+                ])["confirm"]
+                cfg.update(["use_browser_check"], use_browser_check)
+                continue
+            else:
+                break
+        driver.get("https://le.ouchn.cn/")
+        try:
+            button = WebDriverWait(driver, 10).until(
+                expected_conditions.element_to_be_clickable((By.CLASS_NAME, "login-btn"))
+            )
+            button.click()
+            cookie_dict = {}
+            while True:
+                logger.debug("正在等待登录...")
+                cookies = driver.get_cookies()
+                for cookie in cookies:
+                    cookie_dict[cookie['name']] = cookie['value']
+                if "token" in cookie_dict:
+                    cookie_dict = {cookie["name"]: cookie["value"] for cookie in cookies}
+                    cfg.update(["cookies"], cookie_dict)
+                    break
+                else:
+                    sleep(0.5)
+                    continue
+        except (AttributeError, ConnectionResetError, WebDriverException):
+            logger.error("浏览器窗口被关闭！")
+            self.to_login()
+        except Exception as e:
+            raise e
+        finally:
+            driver.quit()
+
+    def try_login(self):
+        while True:
+            response, status = HttpClient().get("https://passport.le.ouchn.cn/localApi/UserInfo")
+            if status:
+                break
+            self.to_login()
+        response = response.json()
+        response_data = response.get("Data")
+        name = response_data.get("Name")
+        nick_name = response_data.get("Nickname")
+        logger.success(f"登录成功, 名字 - {name}, 昵称 - {nick_name}")
+
+
+class OuchnUtils:
+    def __init__(self):
+        self.cfg = Config()
+        self.base_url = "https://le.ouchn.cn/api"
+        self.course_list_cache = {}
+
+    def student_micro_course(self, course_id, course_name):
+        url = f"{self.base_url}/StudentCourse/{course_id}"
+        req_body = {
+            "CourseId": course_id
+        }
+        _, status = HttpClient().post(url=url, json_data=req_body)
+        if not status:
+            logger.error(f"微课 {course_name} 学习记录上报失败")
+            raise
+        logger.debug(f"微课 {course_name} 学习记录上报成功")
+
+    def get_micro_course_info(self, course_id):
+        response, status = HttpClient().get(f"{self.base_url}/Course/{course_id}/MicroCourse/Details")
+        if not status:
+            logger.error("获取微课信息失败")
+            return {}
+        response = response.json()
+        response_data = response.get("Data")
+        micro_info = {
+            "course_name": response_data.get("Name"),
+            "module_list": {}
+        }
+        for module in response_data.get("Modules"):
+            micro_info.get("module_list")[module["Id"]] = {
+                "module_name": module.get("Title")
+            }
+        return micro_info
+
+    def get_study_info(self, course_id, module_id, course_name):
+        micro_course = MicroCourse(course_id, module_id, course_name)
+        micro_course.start_micro_course()
+        study_info = {
+            "study_duration": micro_course.study_duration,
+            "micro_course_duration": micro_course.micro_course_duration,
+            "study_percentage": micro_course.study_percentage
+        }
+        return study_info
+
+    def check_micro_course_progress(self):
+        def check_module_progress(course_id, course_info, module_id, module_info):
+            study_info = self.get_study_info(course_id, module_id, module_info.get("module_name"))
+            study_percentage_str = f"{study_info.get('study_percentage'):.2f}%"
+            if study_info.get("study_percentage") >= 100:
+                logger.info(
+                    f"{study_percentage_str:<8} | " +
+                    f"微课 '{course_info.get('course_name')}' " +
+                    f"章节 '{module_info.get('module_name')}' 已刷完, 从配置文件剔除"
+                )
+                return None
+            else:
+                logger.info(
+                    f"{study_percentage_str:<8} | " +
+                    f"微课 '{course_info.get('course_name')}' " +
+                    f"章节 '{module_info.get('module_name')}'"
+                )
+                return {module_id: module_info}
+        tasks = []
+        for course_id, course_info in self.cfg.get_value(["course_list"]).items():
+            for module_id, module_info in course_info.get("module_list").items():
+                tasks.append((course_id, course_info, module_id, module_info))
+        completed_modules = {}
+        with ThreadPoolExecutor(max_workers=self.cfg.get_value(["max_workers"])) as executor:
+            future_to_task = {
+                executor.submit(check_module_progress, *task): task 
+                for task in tasks
+            }
+            for future in as_completed(future_to_task):
+                result = future.result()
+                if result is not None:
+                    task = future_to_task[future]
+                    course_id = task[0]
+                    course_info = task[1]
+                    
+                    if course_id not in completed_modules:
+                        completed_modules[course_id] = {
+                            "course_name": course_info.get("course_name"),
+                            "module_list": {}
+                        }
+                    completed_modules[course_id]["module_list"].update(result)
+        self.cfg.update(["course_list"], completed_modules)
+        if len(self.cfg.get_value(["course_list"])) == 0:
+            logger.success("所有微课已刷完")
+            return True
+        else:
+            return False
+
+    def micro_course_cache(self, course_id):
+        course_info = {}
+        for id in self.course_list_cache.keys():
+            if course_id == id:
+                course_info = self.course_list_cache[id]
+        if course_info != {}:
+            return course_info
+        self.course_list_cache[course_id] = self.get_micro_course_info(course_id)
+        return self.micro_course_cache(course_id)
+
+    def micro_course_config(self):
+        try:
+            course_id_list = []
+            while True:
+                course_link = prompt([
+                    inquirer.Text(
+                        name="course_link",
+                        message="请输入微课链接 (不输入直接回车即退出输入)"
+                    )
+                ])["course_link"]
+                if course_link == "":
+                    break
+                course_id = course_link.split("/")[4]
+                try:
+                    course_info = self.micro_course_cache(course_id)
+                    course_id_list.append(course_id)
+                    logger.info(f"已添加微课: {course_info.get("course_name")}, 共 {len(course_info.get("module_list"))} 集")
+                except ValueError:
+                    logger.error("微课不存在, 请重新输入微课链接")
+        except KeyboardInterrupt:
+                logger.info("用户强制终止微课输入")
+        for course_id in course_id_list:
+            self.cfg.update(["course_list", course_id], self.micro_course_cache(course_id))
+        logger.success("微课保存成功")
+        self.check_micro_course_progress()
+
+    def confirm_config(self):
+        if len(self.cfg.get_value(["course_list"])) > 0:
+            def fetch_study_info(course_id, course_info, module_id, module_info):
+                study_info = self.get_study_info(course_id, module_id, module_info.get("module_name"))
+                return {
+                    'course_name': course_info.get("course_name"),
+                    'module_name': module_info.get("module_name"),
+                    'study_percentage': study_info["study_percentage"]
+                }
+            tasks = []
+            total_modules = 0
+            for course_id, course_info in self.cfg.get_value(["course_list"]).items():
+                course_module_count = len(course_info.get("module_list", {}))
+                total_modules += course_module_count
+                for module_id, module_info in course_info.get("module_list").items():
+                    tasks.append((course_id, course_info, module_id, module_info))
+            with ThreadPoolExecutor(max_workers=self.cfg.get_value(["max_workers"])) as executor:
+                future_to_task = {
+                    executor.submit(fetch_study_info, *task): task 
+                    for task in tasks
+                }
+                for future in as_completed(future_to_task):
+                    result = future.result()
+                    format_str = f"{result['study_percentage']:.2f}%"
+                    logger.info(
+                        f"{format_str:<8} | " +
+                        f"微课 '{result['course_name']}' " +
+                        f"章节 '{result['module_name']}'"
+                    )
+            logger.info(f"当前需刷 {total_modules} 节课")
+        else:
+            return False
+        logger.info(f"当前最大刷课线程数: {self.cfg.get_value(['max_workers'])}\n")
+        return True
+
+    def relogin(self):
+        self.cfg.update(["cookies"], {})
+        Login().try_login()
