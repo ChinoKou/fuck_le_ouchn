@@ -1,6 +1,7 @@
+tqdm
 loguru
 inquirer
-httpx[http2]
 selenium
+httpx[http2]
 webdriver-manager
 webdrivermanager_cn

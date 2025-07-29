@@ -75,6 +75,7 @@ class MicroCourse:
 
     def run(self):
         try:
+            from tqdm import tqdm
             init_time = random.uniform(1, 3)
             logger.info(f"微课 {self.course_name} 刷课线程将在 {2 * init_time:.1f}s 后启动")
             logger.debug(f"微课 {self.course_name} 的 CourseId 为 {self.course_id}")
@@ -83,26 +84,28 @@ class MicroCourse:
             sleep(init_time)
             self.start_micro_course()
             sleep(init_time)
-            for i in range(((self.micro_course_duration - self.study_duration) // 20) + 1):
-                logger.debug(f"正在准备微课 {self.course_name} 信息")
+            with tqdm(total=self.micro_course_duration - self.study_duration, desc=f"当前刷课: {self.course_name}", unit="秒") as pbar:
+                for i in range(((self.micro_course_duration - self.study_duration) // 20) + 1):
+                    logger.debug(f"正在准备微课 {self.course_name} 信息")
+                    self.start_micro_course()
+                    if self.study_percentage >= 100:
+                        break
+                    interrupt_data = i * 20
+                    if interrupt_data > self.micro_course_duration:
+                        interrupt_data = self.micro_course_duration
+                    wait_time = random.uniform(10, 11)
+                    logger.debug(f"微课 {self.course_name} 等待时间戳上报冷却 {wait_time:.1f}s")
+                    sleep(wait_time)
+                    logger.debug(f"微课 {self.course_name} 当前 SessionId 为 {self.session_id}")
+                    logger.debug(f"开始上报观看微课 {self.course_name}")
+                    self.process_micro_course(str(interrupt_data))
+                    pbar.update(interrupt_data)
+                    logger.debug(f"开始刷新 SessionId")
+                    self.end_micro_course(str(interrupt_data))
                 self.start_micro_course()
-                if self.study_percentage >= 100:
-                    break
-                interrupt_data = i * 20
-                if interrupt_data > self.micro_course_duration:
-                    interrupt_data = self.micro_course_duration
-                wait_time = random.uniform(10, 11)
-                logger.debug(f"微课 {self.course_name} 等待时间戳上报冷却 {wait_time:.1f}s")
-                sleep(wait_time)
-                logger.debug(f"微课 {self.course_name} 当前 SessionId 为 {self.session_id}")
-                logger.debug(f"开始上报观看微课 {self.course_name}")
-                self.process_micro_course(str(interrupt_data))
-                logger.debug(f"开始刷新 SessionId")
-                self.end_micro_course(str(interrupt_data))
-            self.start_micro_course()
-            logger.success("====================================================")
-            logger.success(f"{self.course_name} 已刷完")
-            logger.success("====================================================")
+                logger.success("====================================================")
+                logger.success(f"{self.course_name} 已刷完")
+                logger.success("====================================================")
         except Exception as e:
             logger.error(f"微课 {self.course_name} 刷课线程运行出错")
             raise e
