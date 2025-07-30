@@ -77,14 +77,14 @@ class MicroCourse:
         try:
             from tqdm import tqdm
             init_time = random.uniform(1, 3)
-            logger.info(f"微课 {self.course_name} 刷课线程将在 {2 * init_time:.1f}s 后启动")
+            logger.debug(f"微课 {self.course_name} 刷课线程将在 {2 * init_time:.1f}s 后启动")
             logger.debug(f"微课 {self.course_name} 的 CourseId 为 {self.course_id}")
             logger.debug(f"微课 {self.course_name} 的 ModuleId 为 {self.module_id}")
             OuchnUtils().student_micro_course(self.course_id, self.course_name)
             sleep(init_time)
             self.start_micro_course()
             sleep(init_time)
-            with tqdm(total=self.micro_course_duration - self.study_duration, desc=f"当前刷课: {self.course_name}", unit="秒") as pbar:
+            with tqdm(total=self.micro_course_duration - self.study_duration, desc=self.course_name, unit="秒") as pbar:
                 for i in range(((self.micro_course_duration - self.study_duration) // 20) + 1):
                     logger.debug(f"正在准备微课 {self.course_name} 信息")
                     self.start_micro_course()
@@ -99,13 +99,10 @@ class MicroCourse:
                     logger.debug(f"微课 {self.course_name} 当前 SessionId 为 {self.session_id}")
                     logger.debug(f"开始上报观看微课 {self.course_name}")
                     self.process_micro_course(str(interrupt_data))
-                    pbar.update(interrupt_data)
+                    pbar.update(20)
                     logger.debug(f"开始刷新 SessionId")
                     self.end_micro_course(str(interrupt_data))
-                self.start_micro_course()
-                logger.success("====================================================")
-                logger.success(f"{self.course_name} 已刷完")
-                logger.success("====================================================")
+            logger.debug(f"{self.course_name} 已刷完")
         except Exception as e:
             logger.error(f"微课 {self.course_name} 刷课线程运行出错")
             raise e
@@ -143,7 +140,7 @@ class Login:
                 logger.debug("正在等待登录...")
                 cookies = driver.get_cookies()
                 for cookie in cookies:
-                    cookie_dict[cookie['name']] = cookie['value']
+                    cookie_dict[cookie["name"]] = cookie["value"]
                 if "token" in cookie_dict:
                     cookie_dict = {cookie["name"]: cookie["value"] for cookie in cookies}
                     cfg.update(["cookies"], cookie_dict)
@@ -249,19 +246,19 @@ class OuchnUtils:
         logger.info("正在检查微课完成进度")
         def check_module_progress(course_id, course_info, module_id, module_info):
             study_info = self.get_study_info(course_id, module_id, module_info.get("module_name"))
-            study_percentage_str = f"{study_info.get('study_percentage'):.2f}%"
+            study_percentage_str = f"{study_info.get("study_percentage"):.2f}%"
             if study_info.get("study_percentage") >= 100:
                 logger.info(
                     f"{study_percentage_str:<8} | " +
-                    f"微课 '{course_info.get('course_name')}' " +
-                    f"章节 '{module_info.get('module_name')}' 已刷完, 从配置文件剔除"
+                    f"微课 '{course_info.get("course_name")}' " +
+                    f"章节 '{module_info.get("module_name")}' 已刷完, 从配置文件剔除"
                 )
                 return None
             else:
                 logger.info(
                     f"{study_percentage_str:<8} | " +
-                    f"微课 '{course_info.get('course_name')}' " +
-                    f"章节 '{module_info.get('module_name')}'"
+                    f"微课 '{course_info.get("course_name")}' " +
+                    f"章节 '{module_info.get("module_name")}'"
                 )
                 return {module_id: module_info}
         tasks = []
@@ -352,9 +349,10 @@ class OuchnUtils:
             def fetch_study_info(course_id, course_info, module_id, module_info):
                 study_info = self.get_study_info(course_id, module_id, module_info.get("module_name"))
                 return {
-                    'course_name': course_info.get("course_name"),
-                    'module_name': module_info.get("module_name"),
-                    'study_percentage': study_info["study_percentage"]
+                    "course_name": course_info.get("course_name"),
+                    "module_name": module_info.get("module_name"),
+                    "duration": study_info.get("micro_course_duration") - study_info.get("study_duration"),
+                    "study_percentage": study_info.get("study_percentage")
                 }
             tasks = []
             total_modules = 0
@@ -368,18 +366,26 @@ class OuchnUtils:
                     executor.submit(fetch_study_info, *task): task 
                     for task in tasks
                 }
+                total_duration = 0
                 for future in as_completed(future_to_task):
                     result = future.result()
-                    format_str = f"{result['study_percentage']:.2f}%"
+                    total_duration += result.get("duration")
+                    format_str = f"{result.get("study_percentage"):.2f}%"
                     logger.info(
                         f"{format_str:<8} | " +
-                        f"微课 '{result['course_name']}' " +
-                        f"章节 '{result['module_name']}'"
+                        f"微课 '{result.get("course_name")}' " +
+                        f"章节 '{result.get("module_name")}'"
                     )
-            logger.info(f"当前需刷 {total_modules} 节课")
+            logger.info(f"需刷 {total_modules} 节课")
+            actual_workers = min(total_modules, self.cfg.get_value(["max_workers"]))
+            need_time = total_duration / 20 * 11 / actual_workers + 2 * random.uniform(1, 3) * total_modules + actual_workers - 1
+            if need_time > 60:
+                logger.info(f"预计刷课耗时: {need_time / 60:.2f} 分钟")
+            else:
+                logger.info(f"预计刷课耗时: {need_time:.2f} 秒")
         else:
             return False
-        logger.info(f"当前最大刷课线程数: {self.cfg.get_value(['max_workers'])}\n")
+        logger.info(f"最大刷课线程数: {self.cfg.get_value(["max_workers"])}\n")
         return True
 
     def relogin(self):

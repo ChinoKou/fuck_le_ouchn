@@ -54,6 +54,7 @@ class Config:
         self.load()
 
     def max_workers_config(self):
+        logger.info(f"当前最大线程数：{self.get_value(["max_workers"])}")
         max_workers = int(prompt([inquirer.Text(
             name="max_workers",
             message="配置网络请求时最大线程数(默认16)",
