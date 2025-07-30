@@ -7,14 +7,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from config import Config
 from api import *
 
-VERSION  = "2.0"
+VERSION  = "2.1"
 
 def main():
     while True:
         cfg = Config()
         Login().try_login()
         ouchn_utils = OuchnUtils()
-        menu_choices = ["配置刷课信息", "开始刷课", "配置最大线程数", "重新登录", "清理刷完课程", "恢复出厂设置", "退出"]
+        menu_choices = ["配置刷课信息", "开始刷课", "配置最大线程数", "清理已刷完课程", "删除课程", "重新登录", "恢复出厂设置", "退出"]
         if cfg.get_value(["debug"]):
             menu_choices.append("输出debug日志")
         try:
@@ -71,9 +71,12 @@ def main():
             elif func_choice == "重新登录":
                 logger.info("正在重新登录")
                 ouchn_utils.relogin()
-            elif func_choice == "清理刷完课程":
-                logger.info("清理刷完课程")
+            elif func_choice == "清理已刷完课程":
+                logger.info("清理已刷完课程")
                 ouchn_utils.check_micro_course_progress()
+            elif func_choice == "删除课程":
+                logger.info("删除课程")
+                ouchn_utils.delete_micro_course()
             elif func_choice == "恢复出厂设置":
                 logger.info("恢复出厂设置")
                 cfg.reset()

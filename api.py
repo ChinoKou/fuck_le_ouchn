@@ -208,6 +208,7 @@ class OuchnUtils:
         course_list = []
         page_num = 1
         while True:
+            logger.info(f"正在获取第 {page_num} 页学习记录")
             params = {
                 "PageNum": page_num,
                 "PageSize": 10
@@ -227,7 +228,7 @@ class OuchnUtils:
         for course_info in course_list:
             if course_info.get("CompletionStatus") == "NotAttempted":
                 _course_info = self.micro_course_cache(course_info.get("CourseId"))
-                logger.info(f"已添加微课: {_course_info.get("course_name")}, 共 {len(_course_info.get("module_list"))} 集")
+                logger.info(f"已添加微课: \"{_course_info.get("course_name")}\" 共 {len(_course_info.get("module_list"))} 集")
                 course_id_list.append(course_info.get("CourseId"))
         logger.success("成功添加尚未学习完成的微课")
         return course_id_list
@@ -250,15 +251,15 @@ class OuchnUtils:
             if study_info.get("study_percentage") >= 100:
                 logger.info(
                     f"{study_percentage_str:<8} | " +
-                    f"微课 '{course_info.get("course_name")}' " +
-                    f"章节 '{module_info.get("module_name")}' 已刷完, 从配置文件剔除"
+                    f"微课 \"{course_info.get("course_name")}\" " +
+                    f"章节 \"{module_info.get("module_name")}\" 已刷完, 从配置文件剔除"
                 )
                 return None
             else:
                 logger.info(
                     f"{study_percentage_str:<8} | " +
-                    f"微课 '{course_info.get("course_name")}' " +
-                    f"章节 '{module_info.get("module_name")}'"
+                    f"微课 \"{course_info.get("course_name")}\" " +
+                    f"章节 \"{module_info.get("module_name")}\""
                 )
                 return {module_id: module_info}
         tasks = []
@@ -337,7 +338,7 @@ class OuchnUtils:
                 try:
                     course_info = self.micro_course_cache(course_id)
                     course_id_list.append(course_id)
-                    logger.info(f"已添加微课: {course_info.get("course_name")}, 共 {len(course_info.get("module_list"))} 集")
+                    logger.info(f"已添加微课: \"{course_info.get("course_name")}\" 共 {len(course_info.get("module_list"))} 集")
                 except ValueError:
                     logger.error("微课不存在, 请重新输入微课链接")
         except KeyboardInterrupt:
@@ -373,8 +374,8 @@ class OuchnUtils:
                     format_str = f"{result.get("study_percentage"):.2f}%"
                     logger.info(
                         f"{format_str:<8} | " +
-                        f"微课 '{result.get("course_name")}' " +
-                        f"章节 '{result.get("module_name")}'"
+                        f"微课 \"{result.get("course_name")}\" " +
+                        f"章节 \"{result.get("module_name")}\""
                     )
             logger.info(f"需刷 {total_modules} 节课")
             actual_workers = min(total_modules, self.cfg.get_value(["max_workers"]))
@@ -391,3 +392,24 @@ class OuchnUtils:
     def relogin(self):
         self.cfg.update(["cookies"], {})
         Login().try_login()
+
+    def delete_micro_course(self):
+        if len(self.cfg.get_value(["course_list"])) == 0:
+            logger.info("没有可删除的微课")
+            return
+        delete_list_str = prompt([
+            inquirer.Checkbox(
+                name="delete_list",
+                message="请选择要删除的微课",
+                choices=[
+                    f"{course_id} 微课 \"{course_info.get("course_name")}\" 共 {len(course_info.get("module_list"))} 集" for course_id, course_info in self.cfg.get_value(["course_list"]).items()
+                ]
+            )
+        ])["delete_list"]
+        delete_list = [course.split(" ")[0] for course in delete_list_str]
+        course_list = self.cfg.get_value(["course_list"])
+        for delete_course_id in delete_list:
+            course_info = course_list.get(delete_course_id)
+            logger.info(f"删除微课 \"{course_info.get("course_name")}\" 共 {len(course_info.get("module_list"))} 集")
+            course_list.pop(delete_course_id)
+        self.cfg.update(["course_list"], course_list)
