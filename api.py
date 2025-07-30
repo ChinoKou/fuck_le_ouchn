@@ -208,24 +208,31 @@ class OuchnUtils:
 
     def auto_fetch_course_id(self):
         url = f"{self.base_url}/Completion/Course/Paging"
-        params = {
-            "PageNum": 1,
-            "PageSize": 10
-        }
-        response, status = HttpClient().get(url, params=params)
-        if not status:
-            logger.error("获取学习记录失败")
-            return []
+        course_list = []
+        page_num = 1
+        while True:
+            params = {
+                "PageNum": page_num,
+                "PageSize": 10
+            }
+            response, status = HttpClient().get(url, params=params)
+            if not status:
+                logger.error("获取学习记录失败")
+                return []
+            response = response.json()
+            response_data = response["Data"]
+            course_list.extend(response_data.get("PageListInfos"))
+            if page_num == response_data.get("PageCount"):
+                break
+            page_num += 1
         logger.success("获取学习记录成功")
         course_id_list = []
-        response = response.json()
-        response_data = response["Data"]
-        for course_info in response_data.get("PageListInfos"):
+        for course_info in course_list:
             if course_info.get("CompletionStatus") == "NotAttempted":
                 _course_info = self.micro_course_cache(course_info.get("CourseId"))
                 logger.info(f"已添加微课: {_course_info.get("course_name")}, 共 {len(_course_info.get("module_list"))} 集")
                 course_id_list.append(course_info.get("CourseId"))
-        logger.info("已添加尚未学习完成的微课")
+        logger.success("成功添加尚未学习完成的微课")
         return course_id_list
 
     def get_study_info(self, course_id, module_id, course_name):
